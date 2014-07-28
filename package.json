@@ -1,0 +1,22 @@
+{
+  "name": "Squve",
+  "description": "Draw Square Wave",
+  "author": "OtakaAkr",
+  "version": "0.0.1",
+  "main": "index.html",
+
+  "scripts": {
+    "start": "node_modules/nodewebkit/bin/nodewebkit"
+  },
+
+  "window": {
+    "title": "Sample-node-webkit-app",
+    "width": 800,
+    "height": 600,
+    "toolbar": false
+  },
+
+  "dependencies": {
+    "jquery": "^2.1.1"
+  }
+}

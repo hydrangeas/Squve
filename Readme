@@ -1,0 +1,18 @@
+
+
+# Abstruct
+
+
+# How To Make
+
+* [http://flatbird.github.io/2014/02/15/node-webkit/ Web 技術で PC のアプリが作れる node-webkit]
+
+## OS X
+
+ npm start
+
+## Windows
+
+ zip app.nw index.html package.json
+ copy /b nw.exe+app.nw app.exe
+

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <title>Sample node-webkit app</title>
+    <meta charset="UTF-8">
+    <script>
+      var fs = require('fs');
+
+      document.addEventListener('DOMContentLoaded', function() {
+        var contents = fs.readFileSync('./sample.txt');
+
+        document.body.innerHTML = contents;
+      });
+    </script>
+  </head>
+  <body></body>
+</html>

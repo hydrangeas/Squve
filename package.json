@@ -3,6 +3,10 @@
   "description": "Draw Square Wave",
   "author": "OtakaAkr",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hydrangeas/Squve.git"
+  },
   "main": "index.html",
   "scripts": {
     "start": "node_modules/nodewebkit/bin/nodewebkit"

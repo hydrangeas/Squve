@@ -1,2 +1,6 @@
+# related systems
+*.swp
+
+# related Node.js
 node_modules
 

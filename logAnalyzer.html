@@ -23,18 +23,48 @@
     <script src="./libs/jquery-handsontable/jquery.handsontable.full.js"></script>
     <link rel="stylesheet" media="screen" href="./libs/jquery-handsontable/jquery.handsontable.full.css">
 
-    <!-- aa -->
     <!-- エラーの原因なのでとりあえずコメントアウト
     <script src="data/js/menu.js"></script>
-    -->
     <script src="data/js/dev.js"></script>
-
     <script src="data/js/main.js"></script>
+    -->
+
+    <!--
+     * 定義
+    -->
+    <script type="text/javascript">
+      var fs = require('fs');
+      var readline = require('readline');
+      var JSONLint = require('json-lint');
+
+      // isDef: true/定義済, false/未定義
+      var sq_isDef = false;
+      var sq_defArray = [];
+      var sq_defMax = 0;
+      var sq_logArray = [];
+    </script>
   </head>
   <body class="metro">
 
-    <a id="load" class="button large">ログファイルをロード</a>
+    <!-- 
+     *
+     * コマンド定義 
+     *
+    -->
+    <h2>Definition Command Group</h2>
+    <a id="cmddef" class="button large">Load Definition File</a>
+    <input id="definition_file" type="file" style="display:none"/>
+    <div id="defs"></div>
+
+    <!-- 
+     *
+     * ログファイル解析
+     *
+    -->
+    <h2>Analyze Log File</h2>
+    <a id="load" class="button large">Load Log File</a>
     <input id="import_file" type="file" style="display:none"/>
+    <div id="logs"></div>
 
     <script type="text/javascript">
       var fs = require("fs");
@@ -43,38 +73,237 @@
       function chooseFile (name) {
         var chooser = $(name);
         chooser.change( function (evt) {
-          //
+          // 一時変数
           var tmpStr = '';
+          var orgStr = '';
+          var errStr = '<b>以下の行に問題が発生しています</b>';
+          var isErr = false;
 
-          //
+          // ファイルパス取得
           var path = $(this).val();
-          var rs = fs.ReadStream(path);
-          var rl = readline.createInterface({'input': rs, 'output': tmpStr});
+
+          // ファイル選択エラー
+          if (path.length === 0) {
+            console.debug('ERROR: File path length is 0');
+            return;
+          }
+
+          // 解析用ログファイル読み込み
+          if (name === '#import_file') {
+            if (sq_isDef === false) {
+              console.debug('ERROR: コマンド定義ファイル読み込みフラグがfalseです');
+              $('#logs').html('<b>定義ファイルを読み込んでください</b>');
+              return;
+            }
+            if (sq_defArray.length === 0) {
+              console.debug('ERROR: コマンド定義ファイルの内容が0です');
+              $('#logs').html('<b>定義ファイルが空か、エラーがあります</b>');
+              return;
+            }
+            $('#logs').html('<b>処理を開始しました...</b>');
+          }
+
           var i = 0;
+          var j = 0;
 
-          rl.on('line', function (line) {
-            tmpStr = tmpStr + line.trim() + "<br />";
-            console.debug(++i + ':' + line.trim());
-
-            //下記は失敗例
-            //tmpStr = line.trim() + "<br />";
-            //rl.setPrompt(tmpStr, tmpStr.length);
-            //rl.prompt();
+          //------------------------------
+          // ファイル読み込み
+          //------------------------------
+          var rs = fs.ReadStream(path);
+          var rl = readline.createInterface({
+              'input': rs, 
+              'output': tmpStr
           });
-          rl.resume();
+          var tmpCmdEvent = [];
+          var tmpCmds = [];
+          var lineNum = 0;
 
-          console.debug(tmpStr);
-          $('#logs').text(tmpStr);
+          rl.on('line', function(line) {
+
+            tmpStr = tmpStr + line.trim() + '<br />';
+            orgStr = orgStr + line.trim();
+
+            if (name === '#import_file') {
+              
+              lineNum++;
+              $('#logs').html('<b>処理中: ' + lineNum + ' lines</b>');
+
+              //--------------------
+              // ログの許容される形式
+              // [nnnnnnnn_nnnnnn.nnn][aaaa]aaa   | nnnn
+              // a: alphabet
+              // n: number
+
+              if (line.length > 0) {
+
+                //空行はスキップのみ
+                console.debug('L.' + lineNum + ': empty line');
+                return;
+
+              } else if (line.length !== 39 && line.length > 0) {
+
+                //TODO: 正規表現チェックをする
+
+                //エラー
+                isErr = true;
+                errStr = errStr + '<b>L.' + lineNum + '</b>: ' + line.trim() + '<br/>';
+                return;
+
+              } else {
+
+                //-----
+                // 右４文字のみ切り出す
+                // * 文字数不足エラーは生じない（３９文字であることが保証されている）
+                var t = line.trim().slice(-4);
+                tmpCmds.push(t);
+                tmpCmdEvent.push(t.slice(0, 2));
+
+                // 探索
+                if (tmpCmds.length >= sq_defMax) {
+
+                  var joinedStr = tmpCmdEvent.join();
+                  var isSrchSuccess = false;
+                  // push済みコマンド数がコマンドグループ内の最大数を超えた場合は探索する
+                  for (i = 0; i < sq_defArray.length; i++) {
+
+                    if (joinedStr.indexOf(sq_defArray[i].group.join()) === 0) {
+
+                      //見つかった分は取り除いて退避する
+                      var tmpLog = tmpCmds.splice(0, sq_defArray[i].group.length);
+                      tmpCmdEvent.splice(0, sq_defArray[i].group.length);
+
+                      //退避したものを保存する
+                      sq_logArray.push({
+                        'Type': i,
+                        'Data': tmpLog
+                      });
+
+                      //フラグの更新
+                      isSrchSuccess = true;
+
+                      //探索終了
+                      break;
+                    }
+                  }
+
+                  //--------------------
+                  // 探索失敗の場合は頭１バイト分を破棄する
+                  //--------------------
+                  if (isSrchSuccess === false) {
+                    var errCmd = tmpCmds.shift();
+                    tmpCmdEvent.shift();
+
+                    //
+                    isErr = true;
+                    errStr = errStr + '<b>探索中:</b> ' + errCmd + 'を破棄しました<br />';
+                  }
+                }
+              }
+            }
+          });
+
+          rl.on('close', function() {
+            if (name === '#import_file') {
+
+              console.debug(sq_logArray);
+              if (isErr === false) {
+                errStr = '<b>エラーは見つかりませんでした</b>';
+              }
+              $('#logs').html(errStr);
+            } else {
+
+              //
+              var lint = JSONLint(orgStr, {comments: true});
+              if (lint.error) {
+                
+                //エラー出力
+                $('#defs').html(
+                  lint.error + '<br />' + '<b>Line:</b> ' + lint.line + '<br />' + '<b>Character:</b> ' + lint.character
+                );
+
+                //定義失敗を保存
+                sq_isDef = false;
+              } else {
+
+                var defObj = JSON.parse(orgStr);
+                var cmdList = defObj.commands;
+                if (typeof cmdList === 'undefined') {
+                  //エラー
+                  console.debug('jsonファイルにcommandsディレクティブがみつかりません:');
+                  console.debug(defObj);
+
+                  //定義ファイルの誤り
+                  sq_isDef = false;
+
+                  //強制終了
+                  return;
+                }
+
+                //--------------------
+                // コマンドグループ全体を降順ソート
+                // * 最長一致検索を簡易にするため
+                //--------------------
+                cmdList.sort( function(a, b) {
+                  return b.group.length - a.group.length;
+                });
+                sq_defArray = cmdList;
+
+                //コマンドの最大サイズを取得
+                // * sq_defArray[0].lengthだけでいいはずなんだけど
+                var max = 0;
+                for (i = 0; i < cmdList.length; i++) {
+                  if (max < cmdList[i].group.length) {
+                    max = cmdList[i].group.length;
+                  }
+                }
+                sq_defMax = max;
+
+                //--------------------
+                // コマンド一覧を出力
+                //--------------------
+                // table
+                var $table = $('<table/>');
+                $table.addClass('table striped borderd hovered');
+                // tbody
+                var $tbody = $('<tbody/>');
+                for (i = 0; i < defObj.commands.length; i++) {
+                  // tr
+                  var $tr = $('<tr/>');
+                  // コマンドグループ名だけ先に入れておく
+                  $tr.append('<td>' + defObj.commands[i].name + '</td>');
+                  for (j = 0; j < sq_defMax; j++) {
+                    // td
+                    var $td = $('<td/>');
+                    if (j < defObj.commands[i].group.lenth) {
+                      $td.text(defObj.commands[i].group[j]);
+                    } else {
+                      //コマンド数が最大数より少ない場合は'-'で埋める
+                      $td.text('-');
+                    }
+                    $tr.append($td);
+                  }
+                  $tbody.append($tr);
+                }
+                $table.append($tbody);
+
+                //表示
+                $('#defs').html($table);
+
+                //定義完了
+                sq_isDef = true;
+              }
+            }
+          });
         });
         chooser.trigger('click');
       }
     $('#load').on('click', function() {
         chooseFile('#import_file');
     });
+    $('#cmddef').on('click', function() {
+        chooseFile('#definition_file');
+    });
     </script>
-
-    <h2>Logs</h2>
-    <div id="logs"></div>
 
   </body>
 </html>
